@@ -15,7 +15,6 @@
 package parser
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -31,6 +30,7 @@ import (
 	"strings"
 
 	. "github.com/cloudwego/abcoder/lang/uniast"
+	"golang.org/x/mod/modfile"
 )
 
 //---------------- Golang Parser -----------------
@@ -110,7 +110,7 @@ func (p *GoParser) collectGoMods(startDir string) error {
 		p.repo.Modules[name] = newModule(name, rel)
 		p.modules = append(p.modules, newModuleInfo(name, rel, name))
 
-		deps, err := getDeps(filepath.Dir(path))
+		deps, err := getDepsWithoutTidy(filepath.Dir(path))
 		if err != nil {
 			return err
 		}
@@ -143,6 +143,26 @@ type dep struct {
 		Dir      string   `json:"Dir"`
 		GoMod    string   `json:"GoMod"`
 	} `json:"Module"`
+}
+
+func getDepsWithoutTidy(dir string) (map[string]string, error) {
+	// read go.mod
+	bs, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read go.mod: %v", err)
+	}
+	modFile, err := modfile.Parse(dir, bs, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse go.mod: %v", err)
+	}
+	deps := make(map[string]string)
+	for _, req := range modFile.Require {
+		deps[req.Mod.Path] = req.Mod.Path + "@" + req.Mod.Version
+	}
+	for _, replace := range modFile.Replace {
+		deps[replace.Old.Path] = replace.New.Path + "@" + replace.New.Version
+	}
+	return deps, nil
 }
 
 func getDeps(dir string) (map[string]string, error) {
@@ -215,22 +235,22 @@ func (p *GoParser) ParseRepo() (Repository, error) {
 
 func (p *GoParser) ParseModule(mod *Module, dir string) (err error) {
 	// run go mod tidy before parse
-	cmd := exec.Command("go", "mod", "tidy")
-	cmd.Dir = dir
-	buf := bytes.NewBuffer(nil)
-	cmd.Stderr = buf
-	cmd.Stdout = buf
-	go func() {
-		sc := bufio.NewScanner(buf)
-		// scan and print
-		for sc.Scan() {
-			fmt.Fprintln(os.Stderr, sc.Text())
-		}
-	}()
-	fmt.Fprintf(os.Stderr, "running go mod tidy in %s ...\n", dir)
-	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "run go mod tidy failed in %s: %v\n", dir, buf.String())
-	}
+	// cmd := exec.Command("go", "mod", "tidy")
+	// cmd.Dir = dir
+	// buf := bytes.NewBuffer(nil)
+	// cmd.Stderr = buf
+	// cmd.Stdout = buf
+	// go func() {
+	// 	sc := bufio.NewScanner(buf)
+	// 	// scan and print
+	// 	for sc.Scan() {
+	// 		fmt.Fprintln(os.Stderr, sc.Text())
+	// 	}
+	// }()
+	// fmt.Fprintf(os.Stderr, "running go mod tidy in %s ...\n", dir)
+	// if err := cmd.Run(); err != nil {
+	// 	fmt.Fprintf(os.Stderr, "run go mod tidy failed in %s: %v\n", dir, buf.String())
+	// }
 
 	filepath.Walk(dir, func(path string, info fs.FileInfo, e error) error {
 		if info != nil && info.IsDir() && filepath.Base(path) == ".git" {
