@@ -162,6 +162,7 @@ var loadCount = 0
 
 func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err error) {
 	if mm := p.repo.Modules[mod.Name]; mm != nil && (*mm).Packages[pkgPath] != nil {
+		fmt.Fprintf(os.Stderr, "skip package %s by loader\n", pkgPath)
 		return nil
 	}
 	fmt.Fprintf(os.Stderr, "[loadPackages] mod: %s, dir: %s, pkgPath: %s\n", mod.Name, dir, pkgPath)
@@ -187,9 +188,11 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 	}
 	for _, pkg := range pkgs {
 		if mm := p.repo.Modules[mod.Name]; mm != nil && (*mm).Packages[pkg.ID] != nil {
+			fmt.Fprintf(os.Stderr, "skip package %s by loader\n", pkg.ID)
 			continue
 		}
 		if pp, ok := mod.Packages[pkg.ID]; ok && pp != nil {
+			fmt.Fprintf(os.Stderr, "skip package %s by loader\n", pkg.ID)
 			continue
 		}
 	next_file:
@@ -198,6 +201,7 @@ func (p *GoParser) loadPackages(mod *Module, dir string, pkgPath PkgPath) (err e
 				fmt.Fprintf(os.Stderr, "skip file %s by loader\n", file.Name)
 				continue
 			}
+			fmt.Fprintf(os.Stderr, "parse file %s\n", file.Name)
 			filePath := pkg.GoFiles[idx]
 			for _, exclude := range p.exclues {
 				if exclude.MatchString(filePath) {
